@@ -53,6 +53,7 @@ var (
 			"Authorization",
 			"Content-Type",
 			"X-Requested-With",
+			"DPoP",
 		},
 		AllowedMethods: []string{
 			http.MethodGet,

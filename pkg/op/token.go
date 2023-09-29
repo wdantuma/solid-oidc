@@ -54,12 +54,17 @@ func CreateTokenResponse(ctx context.Context, request IDTokenRequest, client Cli
 		state = authRequest.GetState()
 	}
 
+	tokenType := oidc.BearerToken
+	if ctx.Value("DPoPThumbprint") != nil {
+		tokenType = "DPoP"
+	}
+
 	exp := uint64(validity.Seconds())
 	return &oidc.AccessTokenResponse{
 		AccessToken:  accessToken,
 		IDToken:      idToken,
 		RefreshToken: newRefreshToken,
-		TokenType:    oidc.BearerToken,
+		TokenType:    tokenType,
 		ExpiresIn:    exp,
 		State:        state,
 	}, nil

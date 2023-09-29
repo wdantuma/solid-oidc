@@ -21,6 +21,7 @@ var DefaultSupportedScopes = []string{
 	oidc.ScopePhone,
 	oidc.ScopeAddress,
 	oidc.ScopeOfflineAccess,
+	"webid",
 }
 
 func discoveryHandler(c Configuration, s DiscoverStorage) func(http.ResponseWriter, *http.Request) {
@@ -207,6 +208,7 @@ func SupportedClaims(c Configuration) []string {
 		"email_verified",
 		"phone_number",
 		"phone_number_verified",
+		"webid",
 	}
 }
 
