@@ -9,6 +9,7 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/gorilla/schema"
 	"github.com/rs/cors"
+	"github.com/wdantuma/go-dpop/dpop"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/trace"
 	"golang.org/x/text/language"
@@ -53,7 +54,7 @@ var (
 			"Authorization",
 			"Content-Type",
 			"X-Requested-With",
-			"DPoP",
+			dpop.DPoPHeaderKey,
 		},
 		AllowedMethods: []string{
 			http.MethodGet,

@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/wdantuma/go-dpop/dpop"
 	"github.com/zitadel/oidc/v2/pkg/crypto"
 	"github.com/zitadel/oidc/v2/pkg/oidc"
 	"github.com/zitadel/oidc/v2/pkg/strings"
@@ -55,8 +56,8 @@ func CreateTokenResponse(ctx context.Context, request IDTokenRequest, client Cli
 	}
 
 	tokenType := oidc.BearerToken
-	if ctx.Value("DPoPThumbprint") != nil {
-		tokenType = "DPoP"
+	if ctx.Value(dpop.DPopThumbprint) != nil {
+		tokenType = dpop.DPoPHeaderKey
 	}
 
 	exp := uint64(validity.Seconds())
