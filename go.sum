@@ -47,8 +47,8 @@ github.com/stretchr/objx v0.1.0/go.mod h1:HFkY916IF+rwdDfMAkV7OtwuqBVzrE8GR6GFx+
 github.com/stretchr/testify v1.7.0/go.mod h1:6Fq8oRcR53rry900zMqJjRRixrwX3KX962/h/Wwjteg=
 github.com/stretchr/testify v1.8.4 h1:CcVxjf3Q8PM0mHUKJCdn+eZZtm5yQwehR5yeSVQQcUk=
 github.com/stretchr/testify v1.8.4/go.mod h1:sz/lmYIOXD/1dqDmKjjqLyZ2RngseejIcXlSw2iwfAo=
-github.com/wdantuma/go-dpop v0.0.0-20230929090938-6852db4d5ce3 h1:HamayzCp5KD5J9EaChoHOOzr1wQtqTpUsOyLSNI1FxI=
-github.com/wdantuma/go-dpop v0.0.0-20230929090938-6852db4d5ce3/go.mod h1:caf5jPrzPkx0p1YG6cgE12FEOaUOWbV+hStsF8Nlg4M=
+github.com/wdantuma/go-dpop v0.0.0-20230929091935-7cd0b6d50338 h1:7NCRndZoG/XI/S7RkGIlFuE4Z+ryfusJ4OjVeVmirMM=
+github.com/wdantuma/go-dpop v0.0.0-20230929091935-7cd0b6d50338/go.mod h1:caf5jPrzPkx0p1YG6cgE12FEOaUOWbV+hStsF8Nlg4M=
 github.com/yuin/goldmark v1.3.5/go.mod h1:mwnBkeHKe2W/ZEtQ+71ViKU8L12m81fl3OWwC1Zlc8k=
 go.opentelemetry.io/otel v1.18.0 h1:TgVozPGZ01nHyDZxK5WGPFB9QexeTMXEH7+tIClWfzs=
 go.opentelemetry.io/otel v1.18.0/go.mod h1:9lWqYO0Db579XzVuCKFNPDl4s73Voa+zEck3wHaAYQI=
