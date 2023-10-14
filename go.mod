@@ -17,7 +17,6 @@ require (
 	github.com/stretchr/testify v1.8.4
 	github.com/wdantuma/go-dpop v0.0.0-20230929091935-7cd0b6d50338
 	github.com/zitadel/logging v0.4.0
-	github.com/zitadel/oidc/v2 v2.11.0
 	github.com/zitadel/schema v1.3.0
 	go.opentelemetry.io/otel v1.19.0
 	go.opentelemetry.io/otel/trace v1.19.0
@@ -34,6 +33,7 @@ require (
 	github.com/google/go-querystring v1.1.0 // indirect
 	github.com/gorilla/schema v1.2.0 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
+	github.com/zitadel/oidc/v2 v2.11.0 // indirect
 	go.opentelemetry.io/otel/metric v1.19.0 // indirect
 	golang.org/x/crypto v0.14.0 // indirect
 	golang.org/x/net v0.17.0 // indirect
