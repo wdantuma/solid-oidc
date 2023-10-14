@@ -7,7 +7,7 @@ import (
 	"crypto/rsa"
 	"errors"
 
-	"gopkg.in/square/go-jose.v2"
+	jose "github.com/go-jose/go-jose/v3"
 )
 
 const (
@@ -46,8 +46,8 @@ func GetKeyIDAndAlg(jws *jose.JSONWebSignature) (string, string) {
 //
 // will return false none or multiple match
 //
-//deprecated: use FindMatchingKey which will return an error (more specific) instead of just a bool
-//moved implementation already to FindMatchingKey
+// deprecated: use FindMatchingKey which will return an error (more specific) instead of just a bool
+// moved implementation already to FindMatchingKey
 func FindKey(keyID, use, expectedAlg string, keys ...jose.JSONWebKey) (jose.JSONWebKey, bool) {
 	key, err := FindMatchingKey(keyID, use, expectedAlg, keys...)
 	return key, err == nil
@@ -91,7 +91,7 @@ func FindMatchingKey(keyID, use, expectedAlg string, keys ...jose.JSONWebKey) (k
 	return key, ErrKeyNone
 }
 
-func algToKeyType(key interface{}, alg string) bool {
+func algToKeyType(key any, alg string) bool {
 	switch alg[0] {
 	case 'R', 'P':
 		_, ok := key.(*rsa.PublicKey)

@@ -3,14 +3,14 @@ package op
 import (
 	"errors"
 
-	"gopkg.in/square/go-jose.v2"
+	jose "github.com/go-jose/go-jose/v3"
 )
 
 var ErrSignerCreationFailed = errors.New("signer creation failed")
 
 type SigningKey interface {
 	SignatureAlgorithm() jose.SignatureAlgorithm
-	Key() interface{}
+	Key() any
 	ID() string
 }
 
@@ -32,5 +32,5 @@ type Key interface {
 	ID() string
 	Algorithm() jose.SignatureAlgorithm
 	Use() string
-	Key() interface{}
+	Key() any
 }

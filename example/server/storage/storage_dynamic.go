@@ -4,10 +4,10 @@ import (
 	"context"
 	"time"
 
-	"gopkg.in/square/go-jose.v2"
+	jose "github.com/go-jose/go-jose/v3"
 
-	"github.com/zitadel/oidc/v2/pkg/oidc"
-	"github.com/zitadel/oidc/v2/pkg/op"
+	"github.com/zitadel/oidc/v3/pkg/oidc"
+	"github.com/zitadel/oidc/v3/pkg/op"
 )
 
 type multiStorage struct {
@@ -239,7 +239,7 @@ func (s *multiStorage) SetIntrospectionFromToken(ctx context.Context, introspect
 
 // GetPrivateClaimsFromScopes implements the op.Storage interface
 // it will be called for the creation of a JWT access token to assert claims for custom scopes
-func (s *multiStorage) GetPrivateClaimsFromScopes(ctx context.Context, userID, clientID string, scopes []string) (claims map[string]interface{}, err error) {
+func (s *multiStorage) GetPrivateClaimsFromScopes(ctx context.Context, userID, clientID string, scopes []string) (claims map[string]any, err error) {
 	storage, err := s.storageFromContext(ctx)
 	if err != nil {
 		return nil, err

@@ -4,10 +4,10 @@ import (
 	"encoding/json"
 	"errors"
 
-	"gopkg.in/square/go-jose.v2"
+	jose "github.com/go-jose/go-jose/v3"
 )
 
-func Sign(object interface{}, signer jose.Signer) (string, error) {
+func Sign(object any, signer jose.Signer) (string, error) {
 	payload, err := json.Marshal(object)
 	if err != nil {
 		return "", err
