@@ -5,9 +5,9 @@ import (
 	"time"
 
 	"github.com/wdantuma/go-dpop/dpop"
-	"github.com/zitadel/oidc/v2/pkg/crypto"
-	"github.com/zitadel/oidc/v2/pkg/oidc"
-	"github.com/zitadel/oidc/v2/pkg/strings"
+	"github.com/zitadel/oidc/v3/pkg/crypto"
+	"github.com/zitadel/oidc/v3/pkg/oidc"
+	"github.com/zitadel/oidc/v3/pkg/strings"
 )
 
 type TokenCreator interface {
