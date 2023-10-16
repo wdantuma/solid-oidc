@@ -15,7 +15,7 @@ require (
 	github.com/rs/cors v1.10.1
 	github.com/sirupsen/logrus v1.9.3
 	github.com/stretchr/testify v1.8.4
-	github.com/wdantuma/go-dpop v0.0.0-20231014150608-a7cc6fa6c614
+	github.com/wdantuma/go-dpop v0.0.0-20231016103449-ec5b3ecdd5c4
 	github.com/zitadel/logging v0.4.0
 	github.com/zitadel/schema v1.3.0
 	golang.org/x/exp v0.0.0-20230817173708-d852ddb80c63
