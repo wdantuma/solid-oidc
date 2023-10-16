@@ -11,9 +11,6 @@ import (
 // CodeExchange handles the OAuth 2.0 authorization_code grant, including
 // parsing, validating, authorizing the client and finally exchanging the code for tokens
 func CodeExchange(w http.ResponseWriter, r *http.Request, exchanger Exchanger) {
-	ctx, span := tracer.Start(r.Context(), "CodeExchange")
-	defer span.End()
-	r = r.WithContext(ctx)
 
 	tokenReq, err := ParseAccessTokenRequest(r, exchanger.Decoder())
 	if err != nil {
@@ -49,9 +46,6 @@ func ParseAccessTokenRequest(r *http.Request, decoder httphelper.Decoder) (*oidc
 // ValidateAccessTokenRequest validates the token request parameters including authorization check of the client
 // and returns the previous created auth request corresponding to the auth code
 func ValidateAccessTokenRequest(ctx context.Context, tokenReq *oidc.AccessTokenRequest, exchanger Exchanger) (AuthRequest, Client, error) {
-	ctx, span := tracer.Start(ctx, "ValidateAccessTokenRequest")
-	defer span.End()
-
 	authReq, client, err := AuthorizeCodeClient(ctx, tokenReq, exchanger)
 	if err != nil {
 		return nil, nil, err
@@ -71,9 +65,6 @@ func ValidateAccessTokenRequest(ctx context.Context, tokenReq *oidc.AccessTokenR
 // AuthorizeCodeClient checks the authorization of the client and that the used method was the one previously registered.
 // It than returns the auth request corresponding to the auth code
 func AuthorizeCodeClient(ctx context.Context, tokenReq *oidc.AccessTokenRequest, exchanger Exchanger) (request AuthRequest, client Client, err error) {
-	ctx, span := tracer.Start(ctx, "AuthorizeCodeClient")
-	defer span.End()
-
 	if tokenReq.ClientAssertionType == oidc.ClientAssertionTypeJWTAssertion {
 		jwtExchanger, ok := exchanger.(JWTAuthorizationGrantExchanger)
 		if !ok || !exchanger.AuthMethodPrivateKeyJWTSupported() {
@@ -114,9 +105,6 @@ func AuthorizeCodeClient(ctx context.Context, tokenReq *oidc.AccessTokenRequest,
 
 // AuthRequestByCode returns the AuthRequest previously created from Storage corresponding to the auth code or an error
 func AuthRequestByCode(ctx context.Context, storage Storage, code string) (AuthRequest, error) {
-	ctx, span := tracer.Start(ctx, "AuthRequestByCode")
-	defer span.End()
-
 	authReq, err := storage.AuthRequestByCode(ctx, code)
 	if err != nil {
 		return nil, oidc.ErrInvalidGrant().WithDescription("invalid code").WithParent(err)

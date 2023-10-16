@@ -204,10 +204,6 @@ func (r *deviceAccessTokenRequest) GetScopes() []string {
 }
 
 func DeviceAccessToken(w http.ResponseWriter, r *http.Request, exchanger Exchanger) {
-	ctx, span := tracer.Start(r.Context(), "DeviceAccessToken")
-	defer span.End()
-	r = r.WithContext(ctx)
-
 	if err := deviceAccessToken(w, r, exchanger); err != nil {
 		RequestError(w, r, err, exchanger.Logger())
 	}

@@ -11,8 +11,6 @@ import (
 	"github.com/rs/cors"
 	"github.com/wdantuma/go-dpop/dpop"
 	"github.com/zitadel/schema"
-	"go.opentelemetry.io/otel"
-	"go.opentelemetry.io/otel/trace"
 	"golang.org/x/exp/slog"
 	"golang.org/x/text/language"
 
@@ -71,12 +69,6 @@ var (
 		},
 	}
 )
-
-var tracer trace.Tracer
-
-func init() {
-	tracer = otel.Tracer("github.com/zitadel/oidc/pkg/op")
-}
 
 type OpenIDProvider interface {
 	http.Handler
