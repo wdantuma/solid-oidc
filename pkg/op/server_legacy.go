@@ -6,41 +6,81 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/go-chi/chi"
+	"github.com/go-chi/chi/v5"
 	"github.com/zitadel/oidc/v3/pkg/oidc"
 )
 
-// LegacyServer is an implementation of [Server[] that
-// simply wraps a [OpenIDProvider].
+// ExtendedLegacyServer allows embedding [LegacyServer] in a struct,
+// so that its methods can be individually overridden.
+//
+// EXPERIMENTAL: may change until v4
+type ExtendedLegacyServer interface {
+	Server
+	Provider() OpenIDProvider
+	Endpoints() Endpoints
+	AuthCallbackURL() func(context.Context, string) string
+}
+
+// RegisterLegacyServer registers a [LegacyServer] or an extension thereof.
+// It takes care of registering the IssuerFromRequest middleware
+// and Authorization Callback Routes.
+// Neither are part of the bare [Server] interface.
+//
+// EXPERIMENTAL: may change until v4
+func RegisterLegacyServer(s ExtendedLegacyServer, options ...ServerOption) http.Handler {
+	provider := s.Provider()
+	options = append(options,
+		WithHTTPMiddleware(intercept(provider.IssuerFromRequest)),
+		WithSetRouter(func(r chi.Router) {
+			r.HandleFunc(s.Endpoints().Authorization.Relative()+authCallbackPathSuffix, authorizeCallbackHandler(provider))
+		}),
+	)
+	return RegisterServer(s, s.Endpoints(), options...)
+}
+
+// LegacyServer is an implementation of [Server] that
+// simply wraps an [OpenIDProvider].
 // It can be used to transition from the former Provider/Storage
 // interfaces to the new Server interface.
+//
+// EXPERIMENTAL: may change until v4
 type LegacyServer struct {
 	UnimplementedServer
 	provider  OpenIDProvider
 	endpoints Endpoints
 }
 
-// NewLegacyServer wraps provider in a `Server` and returns a handler which is
-// the Server's router.
+// NewLegacyServer wraps provider in a `Server` implementation
 //
 // Only non-nil endpoints will be registered on the router.
 // Nil endpoints are disabled.
 //
-// The passed endpoints is also set to the provider,
-// to be consistent with the discovery config.
+// The passed endpoints is also used for the discovery config,
+// and endpoints already set to the provider are ignored.
 // Any `With*Endpoint()` option used on the provider is
 // therefore ineffective.
-func NewLegacyServer(provider OpenIDProvider, endpoints Endpoints) http.Handler {
-	server := RegisterServer(&LegacyServer{
+//
+// EXPERIMENTAL: may change until v4
+func NewLegacyServer(provider OpenIDProvider, endpoints Endpoints) *LegacyServer {
+	return &LegacyServer{
 		provider:  provider,
 		endpoints: endpoints,
-	}, endpoints, WithHTTPMiddleware(intercept(provider.IssuerFromRequest)))
+	}
+}
 
-	router := chi.NewRouter()
-	router.Mount("/", server)
-	router.HandleFunc(authCallbackPath(provider), authorizeCallbackHandler(provider))
+func (s *LegacyServer) Provider() OpenIDProvider {
+	return s.provider
+}
 
-	return router
+func (s *LegacyServer) Endpoints() Endpoints {
+	return s.endpoints
+}
+
+// AuthCallbackURL builds the url for the redirect (with the requestID) after a successful login
+func (s *LegacyServer) AuthCallbackURL() func(context.Context, string) string {
+	return func(ctx context.Context, requestID string) string {
+		return s.endpoints.Authorization.Absolute(IssuerFromContext(ctx)) + authCallbackPathSuffix + "?id=" + requestID
+	}
 }
 
 func (s *LegacyServer) Health(_ context.Context, r *Request[struct{}]) (*Response, error) {
@@ -275,13 +315,30 @@ func (s *LegacyServer) DeviceToken(ctx context.Context, r *ClientRequest[oidc.De
 	return NewResponse(resp), nil
 }
 
-func (s *LegacyServer) Introspect(ctx context.Context, r *ClientRequest[oidc.IntrospectionRequest]) (*Response, error) {
+func (s *LegacyServer) authenticateResourceClient(ctx context.Context, cc *ClientCredentials) (string, error) {
+	if cc.ClientAssertion != "" {
+		if jp, ok := s.provider.(ClientJWTProfile); ok {
+			return ClientJWTAuth(ctx, oidc.ClientAssertionParams{ClientAssertion: cc.ClientAssertion}, jp)
+		}
+		return "", oidc.ErrInvalidClient().WithDescription("client_assertion not supported")
+	}
+	if err := s.provider.Storage().AuthorizeClientIDSecret(ctx, cc.ClientID, cc.ClientSecret); err != nil {
+		return "", oidc.ErrUnauthorizedClient().WithParent(err)
+	}
+	return cc.ClientID, nil
+}
+
+func (s *LegacyServer) Introspect(ctx context.Context, r *Request[IntrospectionRequest]) (*Response, error) {
+	clientID, err := s.authenticateResourceClient(ctx, r.Data.ClientCredentials)
+	if err != nil {
+		return nil, err
+	}
 	response := new(oidc.IntrospectionResponse)
 	tokenID, subject, ok := getTokenIDAndSubject(ctx, s.provider, r.Data.Token)
 	if !ok {
 		return NewResponse(response), nil
 	}
-	err := s.provider.Storage().SetIntrospectionFromToken(ctx, response, tokenID, subject, r.Client.GetID())
+	err = s.provider.Storage().SetIntrospectionFromToken(ctx, response, tokenID, subject, clientID)
 	if err != nil {
 		return NewResponse(response), nil
 	}
@@ -336,9 +393,14 @@ func (s *LegacyServer) EndSession(ctx context.Context, r *Request[oidc.EndSessio
 	if err != nil {
 		return nil, err
 	}
-	err = s.provider.Storage().TerminateSession(ctx, session.UserID, session.ClientID)
+	redirect := session.RedirectURI
+	if fromRequest, ok := s.provider.Storage().(CanTerminateSessionFromRequest); ok {
+		redirect, err = fromRequest.TerminateSessionFromRequest(ctx, session)
+	} else {
+		err = s.provider.Storage().TerminateSession(ctx, session.UserID, session.ClientID)
+	}
 	if err != nil {
 		return nil, err
 	}
-	return NewRedirect(session.RedirectURI), nil
+	return NewRedirect(redirect), nil
 }

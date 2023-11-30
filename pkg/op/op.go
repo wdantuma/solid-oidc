@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/go-chi/chi"
+	"github.com/go-chi/chi/v5"
 	jose "github.com/go-jose/go-jose/v3"
 	"github.com/rs/cors"
 	"github.com/wdantuma/go-dpop/dpop"
@@ -91,9 +91,19 @@ type OpenIDProvider interface {
 
 type HttpInterceptor func(http.Handler) http.Handler
 
+type corsOptioner interface {
+	CORSOptions() *cors.Options
+}
+
 func CreateRouter(o OpenIDProvider, interceptors ...HttpInterceptor) chi.Router {
 	router := chi.NewRouter()
-	router.Use(cors.New(defaultCORSOptions).Handler)
+	if co, ok := o.(corsOptioner); ok {
+		if opts := co.CORSOptions(); opts != nil {
+			router.Use(cors.New(*opts).Handler)
+		}
+	} else {
+		router.Use(cors.New(defaultCORSOptions).Handler)
+	}
 	router.Use(intercept(o.IssuerFromRequest, interceptors...))
 	router.HandleFunc(healthEndpoint, healthHandler)
 	router.HandleFunc(readinessEndpoint, readyHandler(o.Probes()))
@@ -167,27 +177,58 @@ type Endpoints struct {
 // Successful logins should mark the request as authorized and redirect back to to
 // op.AuthCallbackURL(provider) which is probably /callback. On the redirect back
 // to the AuthCallbackURL, the request id should be passed as the "id" parameter.
+//
+// Deprecated: use [NewProvider] with an issuer function direct.
 func NewOpenIDProvider(issuer string, config *Config, storage Storage, opOpts ...Option) (*Provider, error) {
-	return newProvider(config, storage, StaticIssuer(issuer), opOpts...)
+	return NewProvider(config, storage, StaticIssuer(issuer), opOpts...)
 }
 
 // NewForwardedOpenIDProvider tries to establishes the issuer from the request Host.
+//
+// Deprecated: use [NewProvider] with an issuer function direct.
 func NewDynamicOpenIDProvider(path string, config *Config, storage Storage, opOpts ...Option) (*Provider, error) {
-	return newProvider(config, storage, IssuerFromHost(path), opOpts...)
+	return NewProvider(config, storage, IssuerFromHost(path), opOpts...)
 }
 
 // NewForwardedOpenIDProvider tries to establish the Issuer from a Forwarded request header, if it is set.
 // See [IssuerFromForwardedOrHost] for details.
+//
+// Deprecated: use [NewProvider] with an issuer function direct.
 func NewForwardedOpenIDProvider(path string, config *Config, storage Storage, opOpts ...Option) (*Provider, error) {
-	return newProvider(config, storage, IssuerFromForwardedOrHost(path), opOpts...)
+	return NewProvider(config, storage, IssuerFromForwardedOrHost(path), opOpts...)
 }
 
-func newProvider(config *Config, storage Storage, issuer func(bool) (IssuerFromRequest, error), opOpts ...Option) (_ *Provider, err error) {
+// NewProvider creates a provider with a router on it's embedded http.Handler.
+// Issuer is a function that must return the issuer on every request.
+// Typically [StaticIssuer], [IssuerFromHost] or [IssuerFromForwardedOrHost] can be used.
+//
+// The router handles a suite of endpoints (some paths can be overridden):
+//
+//	/healthz
+//	/ready
+//	/.well-known/openid-configuration
+//	/oauth/token
+//	/oauth/introspect
+//	/callback
+//	/authorize
+//	/userinfo
+//	/revoke
+//	/end_session
+//	/keys
+//	/device_authorization
+//
+// This does not include login. Login is handled with a redirect that includes the
+// request ID. The redirect for logins is specified per-client by Client.LoginURL().
+// Successful logins should mark the request as authorized and redirect back to to
+// op.AuthCallbackURL(provider) which is probably /callback. On the redirect back
+// to the AuthCallbackURL, the request id should be passed as the "id" parameter.
+func NewProvider(config *Config, storage Storage, issuer func(insecure bool) (IssuerFromRequest, error), opOpts ...Option) (_ *Provider, err error) {
 	o := &Provider{
 		config:    config,
 		storage:   storage,
 		endpoints: DefaultEndpoints,
 		timer:     make(<-chan time.Time),
+		corsOpts:  &defaultCORSOptions,
 		logger:    slog.Default(),
 	}
 
@@ -232,6 +273,7 @@ type Provider struct {
 	timer                   <-chan time.Time
 	accessTokenVerifierOpts []AccessTokenVerifierOpt
 	idTokenHintVerifierOpts []IDTokenHintVerifierOpt
+	corsOpts                *cors.Options
 	logger                  *slog.Logger
 }
 
@@ -389,6 +431,10 @@ func (o *Provider) Probes() []ProbesFn {
 	return []ProbesFn{
 		ReadyStorage(o.Storage()),
 	}
+}
+
+func (o *Provider) CORSOptions() *cors.Options {
+	return o.corsOpts
 }
 
 func (o *Provider) Logger() *slog.Logger {
@@ -551,6 +597,13 @@ func WithIDTokenHintVerifierOpts(opts ...IDTokenHintVerifierOpt) Option {
 	}
 }
 
+func WithCORSOptions(opts *cors.Options) Option {
+	return func(o *Provider) error {
+		o.corsOpts = opts
+		return nil
+	}
+}
+
 // WithLogger lets a logger other than slog.Default().
 //
 // EXPERIMENTAL: Will change to log/slog import after we drop support for Go 1.20
@@ -567,6 +620,6 @@ func intercept(i IssuerFromRequest, interceptors ...HttpInterceptor) func(handle
 		for i := len(interceptors) - 1; i >= 0; i-- {
 			handler = interceptors[i](handler)
 		}
-		return cors.New(defaultCORSOptions).Handler(issuerInterceptor.Handler(handler))
+		return issuerInterceptor.Handler(handler)
 	}
 }
