@@ -44,6 +44,33 @@ var (
 		DeviceAuthorization: NewEndpoint(defaultDeviceAuthzEndpoint),
 	}
 
+	DefaultSupportedClaims = []string{
+		"sub",
+		"aud",
+		"exp",
+		"iat",
+		"iss",
+		"auth_time",
+		"nonce",
+		"acr",
+		"amr",
+		"c_hash",
+		"at_hash",
+		"act",
+		"scopes",
+		"client_id",
+		"azp",
+		"preferred_username",
+		"name",
+		"family_name",
+		"given_name",
+		"locale",
+		"email",
+		"email_verified",
+		"phone_number",
+		"phone_number_verified",
+	}
+
 	defaultCORSOptions = cors.Options{
 		AllowCredentials: true,
 		AllowedHeaders: []string{
@@ -140,6 +167,7 @@ type Config struct {
 	GrantTypeRefreshToken    bool
 	RequestObjectSupported   bool
 	SupportedUILocales       []language.Tag
+	SupportedClaims          []string
 	DeviceAuthorization      DeviceAuthorizationConfig
 }
 
@@ -223,13 +251,16 @@ func NewForwardedOpenIDProvider(path string, config *Config, storage Storage, op
 // op.AuthCallbackURL(provider) which is probably /callback. On the redirect back
 // to the AuthCallbackURL, the request id should be passed as the "id" parameter.
 func NewProvider(config *Config, storage Storage, issuer func(insecure bool) (IssuerFromRequest, error), opOpts ...Option) (_ *Provider, err error) {
+	keySet := &OpenIDKeySet{storage}
 	o := &Provider{
-		config:    config,
-		storage:   storage,
-		endpoints: DefaultEndpoints,
-		timer:     make(<-chan time.Time),
-		corsOpts:  &defaultCORSOptions,
-		logger:    slog.Default(),
+		config:            config,
+		storage:           storage,
+		accessTokenKeySet: keySet,
+		idTokenHinKeySet:  keySet,
+		endpoints:         DefaultEndpoints,
+		timer:             make(<-chan time.Time),
+		corsOpts:          &defaultCORSOptions,
+		logger:            slog.Default(),
 	}
 
 	for _, optFunc := range opOpts {
@@ -242,19 +273,11 @@ func NewProvider(config *Config, storage Storage, issuer func(insecure bool) (Is
 	if err != nil {
 		return nil, err
 	}
-
 	o.Handler = CreateRouter(o, o.interceptors...)
-
 	o.decoder = schema.NewDecoder()
 	o.decoder.IgnoreUnknownKeys(true)
-
 	o.encoder = oidc.NewEncoder()
-
 	o.crypto = NewAESCrypto(config.CryptoKey)
-
-	// Avoid potential race conditions by calling these early
-	_ = o.openIDKeySet() // sets keySet
-
 	return o, nil
 }
 
@@ -265,7 +288,8 @@ type Provider struct {
 	insecure                bool
 	endpoints               *Endpoints
 	storage                 Storage
-	keySet                  *openIDKeySet
+	accessTokenKeySet       oidc.KeySet
+	idTokenHinKeySet        oidc.KeySet
 	crypto                  Crypto
 	decoder                 *schema.Decoder
 	encoder                 *schema.Encoder
@@ -401,7 +425,7 @@ func (o *Provider) Encoder() httphelper.Encoder {
 }
 
 func (o *Provider) IDTokenHintVerifier(ctx context.Context) *IDTokenHintVerifier {
-	return NewIDTokenHintVerifier(IssuerFromContext(ctx), o.openIDKeySet(), o.idTokenHintVerifierOpts...)
+	return NewIDTokenHintVerifier(IssuerFromContext(ctx), o.idTokenHinKeySet, o.idTokenHintVerifierOpts...)
 }
 
 func (o *Provider) JWTProfileVerifier(ctx context.Context) *JWTProfileVerifier {
@@ -409,14 +433,7 @@ func (o *Provider) JWTProfileVerifier(ctx context.Context) *JWTProfileVerifier {
 }
 
 func (o *Provider) AccessTokenVerifier(ctx context.Context) *AccessTokenVerifier {
-	return NewAccessTokenVerifier(IssuerFromContext(ctx), o.openIDKeySet(), o.accessTokenVerifierOpts...)
-}
-
-func (o *Provider) openIDKeySet() oidc.KeySet {
-	if o.keySet == nil {
-		o.keySet = &openIDKeySet{o.Storage()}
-	}
-	return o.keySet
+	return NewAccessTokenVerifier(IssuerFromContext(ctx), o.accessTokenKeySet, o.accessTokenVerifierOpts...)
 }
 
 func (o *Provider) Crypto() Crypto {
@@ -446,13 +463,13 @@ func (o *Provider) HttpHandler() http.Handler {
 	return o
 }
 
-type openIDKeySet struct {
+type OpenIDKeySet struct {
 	Storage
 }
 
 // VerifySignature implements the oidc.KeySet interface
 // providing an implementation for the keys stored in the OP Storage interface
-func (o *openIDKeySet) VerifySignature(ctx context.Context, jws *jose.JSONWebSignature) ([]byte, error) {
+func (o *OpenIDKeySet) VerifySignature(ctx context.Context, jws *jose.JSONWebSignature) ([]byte, error) {
 	keySet, err := o.Storage.KeySet(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("error fetching keys: %w", err)
@@ -583,9 +600,27 @@ func WithHttpInterceptors(interceptors ...HttpInterceptor) Option {
 	}
 }
 
+// WithAccessTokenKeySet allows passing a KeySet with public keys for Access Token verification.
+// The default KeySet uses the [Storage] interface
+func WithAccessTokenKeySet(keySet oidc.KeySet) Option {
+	return func(o *Provider) error {
+		o.accessTokenKeySet = keySet
+		return nil
+	}
+}
+
 func WithAccessTokenVerifierOpts(opts ...AccessTokenVerifierOpt) Option {
 	return func(o *Provider) error {
 		o.accessTokenVerifierOpts = opts
+		return nil
+	}
+}
+
+// WithIDTokenHintKeySet allows passing a KeySet with public keys for ID Token Hint verification.
+// The default KeySet uses the [Storage] interface.
+func WithIDTokenHintKeySet(keySet oidc.KeySet) Option {
+	return func(o *Provider) error {
+		o.idTokenHinKeySet = keySet
 		return nil
 	}
 }

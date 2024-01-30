@@ -91,7 +91,7 @@ func (s *LegacyServer) Ready(ctx context.Context, r *Request[struct{}]) (*Respon
 	for _, probe := range s.provider.Probes() {
 		// shouldn't we run probes in Go routines?
 		if err := probe(ctx); err != nil {
-			return nil, NewStatusError(err, http.StatusInternalServerError)
+			return nil, AsStatusError(err, http.StatusInternalServerError)
 		}
 	}
 	return NewResponse(Status{Status: "ok"}), nil
@@ -106,7 +106,7 @@ func (s *LegacyServer) Discovery(ctx context.Context, r *Request[struct{}]) (*Re
 func (s *LegacyServer) Keys(ctx context.Context, r *Request[struct{}]) (*Response, error) {
 	keys, err := s.provider.Storage().KeySet(ctx)
 	if err != nil {
-		return nil, NewStatusError(err, http.StatusInternalServerError)
+		return nil, AsStatusError(err, http.StatusInternalServerError)
 	}
 	return NewResponse(jsonWebKeySet(keys)), nil
 }
@@ -127,7 +127,7 @@ func (s *LegacyServer) VerifyAuthRequest(ctx context.Context, r *Request[oidc.Au
 		}
 	}
 	if r.Data.ClientID == "" {
-		return nil, ErrAuthReqMissingClientID
+		return nil, oidc.ErrInvalidRequest().WithParent(ErrAuthReqMissingClientID).WithDescription(ErrAuthReqMissingClientID.Error())
 	}
 	client, err := s.provider.Storage().GetClientByClientID(ctx, r.Data.ClientID)
 	if err != nil {
@@ -155,7 +155,7 @@ func (s *LegacyServer) Authorize(ctx context.Context, r *ClientRequest[oidc.Auth
 func (s *LegacyServer) DeviceAuthorization(ctx context.Context, r *ClientRequest[oidc.DeviceAuthorizationRequest]) (*Response, error) {
 	response, err := createDeviceAuthorization(ctx, r.Data, r.Client.GetID(), s.provider)
 	if err != nil {
-		return nil, NewStatusError(err, http.StatusInternalServerError)
+		return nil, AsStatusError(err, http.StatusInternalServerError)
 	}
 	return NewResponse(response), nil
 }
@@ -205,10 +205,13 @@ func (s *LegacyServer) CodeExchange(ctx context.Context, r *ClientRequest[oidc.A
 	if err != nil {
 		return nil, err
 	}
-	if r.Client.AuthMethod() == oidc.AuthMethodNone {
+	if r.Client.AuthMethod() == oidc.AuthMethodNone || r.Data.CodeVerifier != "" {
 		if err = AuthorizeCodeChallenge(r.Data.CodeVerifier, authReq.GetCodeChallenge()); err != nil {
 			return nil, err
 		}
+	}
+	if r.Data.RedirectURI != authReq.GetRedirectURI() {
+		return nil, oidc.ErrInvalidGrant().WithDescription("redirect_uri does not correspond")
 	}
 	resp, err := CreateTokenResponse(ctx, authReq, r.Client, s.provider, true, r.Data.Code, "")
 	if err != nil {
@@ -245,7 +248,7 @@ func (s *LegacyServer) JWTProfile(ctx context.Context, r *Request[oidc.JWTProfil
 	}
 	tokenRequest, err := VerifyJWTAssertion(ctx, r.Data.Assertion, exchanger.JWTProfileVerifier(ctx))
 	if err != nil {
-		return nil, err
+		return nil, oidc.ErrInvalidRequest().WithParent(err).WithDescription("assertion invalid")
 	}
 
 	tokenRequest.Scopes, err = exchanger.Storage().ValidateJWTProfileScopes(ctx, tokenRequest.Issuer, r.Data.Scope)
@@ -291,7 +294,7 @@ func (s *LegacyServer) ClientCredentialsExchange(ctx context.Context, r *ClientR
 }
 
 func (s *LegacyServer) DeviceToken(ctx context.Context, r *ClientRequest[oidc.DeviceAccessTokenRequest]) (*Response, error) {
-	if !s.provider.GrantTypeClientCredentialsSupported() {
+	if !s.provider.GrantTypeDeviceCodeSupported() {
 		return nil, unimplementedGrantError(oidc.GrantTypeDeviceCode)
 	}
 	// use a limited context timeout shorter as the default
@@ -299,14 +302,9 @@ func (s *LegacyServer) DeviceToken(ctx context.Context, r *ClientRequest[oidc.De
 	ctx, cancel := context.WithTimeout(ctx, 4*time.Second)
 	defer cancel()
 
-	state, err := CheckDeviceAuthorizationState(ctx, r.Client.GetID(), r.Data.DeviceCode, s.provider)
+	tokenRequest, err := CheckDeviceAuthorizationState(ctx, r.Client.GetID(), r.Data.DeviceCode, s.provider)
 	if err != nil {
 		return nil, err
-	}
-	tokenRequest := &deviceAccessTokenRequest{
-		subject:  state.Subject,
-		audience: []string{r.Client.GetID()},
-		scopes:   state.Scopes,
 	}
 	resp, err := CreateDeviceTokenResponse(ctx, tokenRequest, s.provider, r.Client)
 	if err != nil {
