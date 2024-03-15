@@ -1,9 +1,9 @@
 package storage
 
 import (
+	"log/slog"
 	"time"
 
-	"golang.org/x/exp/slog"
 	"golang.org/x/text/language"
 
 	"github.com/zitadel/oidc/v3/pkg/oidc"
@@ -35,6 +35,7 @@ type AuthRequest struct {
 	UserID        string
 	Scopes        []string
 	ResponseType  oidc.ResponseType
+	ResponseMode  oidc.ResponseMode
 	Nonce         string
 	CodeChallenge *OIDCCodeChallenge
 
@@ -100,7 +101,7 @@ func (a *AuthRequest) GetResponseType() oidc.ResponseType {
 }
 
 func (a *AuthRequest) GetResponseMode() oidc.ResponseMode {
-	return "" // we won't handle response mode in this example
+	return a.ResponseMode
 }
 
 func (a *AuthRequest) GetScopes() []string {
@@ -154,6 +155,7 @@ func authRequestToInternal(authReq *oidc.AuthRequest, userID string) *AuthReques
 		UserID:        userID,
 		Scopes:        authReq.Scopes,
 		ResponseType:  authReq.ResponseType,
+		ResponseMode:  authReq.ResponseMode,
 		Nonce:         authReq.Nonce,
 		CodeChallenge: &OIDCCodeChallenge{
 			Challenge: authReq.CodeChallenge,

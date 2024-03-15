@@ -1,9 +1,13 @@
 package op
 
 import (
+	"bytes"
 	"context"
+	_ "embed"
 	"errors"
 	"fmt"
+	"html/template"
+	"log/slog"
 	"net"
 	"net/http"
 	"net/url"
@@ -14,7 +18,6 @@ import (
 	httphelper "github.com/zitadel/oidc/v3/pkg/http"
 	"github.com/zitadel/oidc/v3/pkg/oidc"
 	str "github.com/zitadel/oidc/v3/pkg/strings"
-	"golang.org/x/exp/slog"
 )
 
 type AuthRequest interface {
@@ -67,12 +70,15 @@ func authorizeCallbackHandler(authorizer Authorizer) func(http.ResponseWriter, *
 // Authorize handles the authorization request, including
 // parsing, validating, storing and finally redirecting to the login handler
 func Authorize(w http.ResponseWriter, r *http.Request, authorizer Authorizer) {
+	ctx, span := tracer.Start(r.Context(), "Authorize")
+	r = r.WithContext(ctx)
+	defer span.End()
+
 	authReq, err := ParseAuthorizeRequest(r, authorizer.Decoder())
 	if err != nil {
 		AuthRequestError(w, r, nil, err, authorizer)
 		return
 	}
-	ctx := r.Context()
 	if authReq.RequestParam != "" && authorizer.RequestObjectSupported() {
 		err = ParseRequestObject(ctx, authReq, authorizer.Storage(), IssuerFromContext(ctx))
 		if err != nil {
@@ -207,6 +213,9 @@ func CopyRequestObjectToAuthRequest(authReq *oidc.AuthRequest, requestObject *oi
 
 // ValidateAuthRequest validates the authorize parameters and returns the userID of the id_token_hint if passed
 func ValidateAuthRequest(ctx context.Context, authReq *oidc.AuthRequest, storage Storage, verifier *IDTokenHintVerifier) (sub string, err error) {
+	ctx, span := tracer.Start(ctx, "ValidateAuthRequest")
+	defer span.End()
+
 	authReq.MaxAge, err = ValidateAuthReqPrompt(authReq.Prompt, authReq.MaxAge)
 	if err != nil {
 		return "", err
@@ -307,7 +316,7 @@ func ValidateAuthReqRedirectURI(client Client, uri string, responseType oidc.Res
 		return checkURIAgainstRedirects(client, uri)
 	}
 	if client.ApplicationType() == ApplicationTypeNative {
-		return validateAuthReqRedirectURINative(client, uri, responseType)
+		return validateAuthReqRedirectURINative(client, uri)
 	}
 	if err := checkURIAgainstRedirects(client, uri); err != nil {
 		return err
@@ -327,7 +336,7 @@ func ValidateAuthReqRedirectURI(client Client, uri string, responseType oidc.Res
 }
 
 // ValidateAuthReqRedirectURINative validates the passed redirect_uri and response_type to the registered uris and client type
-func validateAuthReqRedirectURINative(client Client, uri string, responseType oidc.ResponseType) error {
+func validateAuthReqRedirectURINative(client Client, uri string) error {
 	parsedURL, isLoopback := HTTPLoopbackOrLocalhost(uri)
 	isCustomSchema := !strings.HasPrefix(uri, "http://")
 	if err := checkURIAgainstRedirects(client, uri); err == nil {
@@ -359,8 +368,8 @@ func equalURI(url1, url2 *url.URL) bool {
 	return url1.Path == url2.Path && url1.RawQuery == url2.RawQuery
 }
 
-func HTTPLoopbackOrLocalhost(rawurl string) (*url.URL, bool) {
-	parsedURL, err := url.Parse(rawurl)
+func HTTPLoopbackOrLocalhost(rawURL string) (*url.URL, bool) {
+	parsedURL, err := url.Parse(rawURL)
 	if err != nil {
 		return nil, false
 	}
@@ -391,9 +400,9 @@ func ValidateAuthReqIDTokenHint(ctx context.Context, idTokenHint string, verifie
 		return "", nil
 	}
 	claims, err := VerifyIDTokenHint[*oidc.TokenClaims](ctx, idTokenHint, verifier)
-	if err != nil {
+	if err != nil && !errors.As(err, &IDTokenHintExpiredError{}) {
 		return "", oidc.ErrLoginRequired().WithDescription("The id_token_hint is invalid. " +
-			"If you have any questions, you may contact the administrator of the application.")
+			"If you have any questions, you may contact the administrator of the application.").WithParent(err)
 	}
 	return claims.GetSubject(), nil
 }
@@ -406,6 +415,10 @@ func RedirectToLogin(authReqID string, client Client, w http.ResponseWriter, r *
 
 // AuthorizeCallback handles the callback after authentication in the Login UI
 func AuthorizeCallback(w http.ResponseWriter, r *http.Request, authorizer Authorizer) {
+	ctx, span := tracer.Start(r.Context(), "AuthorizeCallback")
+	r = r.WithContext(ctx)
+	defer span.End()
+
 	id, err := ParseAuthorizeCallbackRequest(r)
 	if err != nil {
 		AuthRequestError(w, r, nil, err, authorizer)
@@ -438,6 +451,10 @@ func ParseAuthorizeCallbackRequest(r *http.Request) (id string, err error) {
 
 // AuthResponse creates the successful authentication response (either code or tokens)
 func AuthResponse(authReq AuthRequest, authorizer Authorizer, w http.ResponseWriter, r *http.Request) {
+	ctx, span := tracer.Start(r.Context(), "AuthResponse")
+	r = r.WithContext(ctx)
+	defer span.End()
+
 	client, err := authorizer.Storage().GetClientByClientID(r.Context(), authReq.GetClientID())
 	if err != nil {
 		AuthRequestError(w, r, authReq, err, authorizer)
@@ -452,6 +469,10 @@ func AuthResponse(authReq AuthRequest, authorizer Authorizer, w http.ResponseWri
 
 // AuthResponseCode creates the successful code authentication response
 func AuthResponseCode(w http.ResponseWriter, r *http.Request, authReq AuthRequest, authorizer Authorizer) {
+	ctx, span := tracer.Start(r.Context(), "AuthResponseCode")
+	r = r.WithContext(ctx)
+	defer span.End()
+
 	code, err := CreateAuthRequestCode(r.Context(), authReq, authorizer.Storage(), authorizer.Crypto())
 	if err != nil {
 		AuthRequestError(w, r, authReq, err, authorizer)
@@ -464,6 +485,17 @@ func AuthResponseCode(w http.ResponseWriter, r *http.Request, authReq AuthReques
 		Code:  code,
 		State: authReq.GetState(),
 	}
+
+	if authReq.GetResponseMode() == oidc.ResponseModeFormPost {
+		err := AuthResponseFormPost(w, authReq.GetRedirectURI(), &codeResponse, authorizer.Encoder())
+		if err != nil {
+			AuthRequestError(w, r, authReq, err, authorizer)
+			return
+		}
+
+		return
+	}
+
 	callback, err := AuthResponseURL(authReq.GetRedirectURI(), authReq.GetResponseType(), authReq.GetResponseMode(), &codeResponse, authorizer.Encoder())
 	if err != nil {
 		AuthRequestError(w, r, authReq, err, authorizer)
@@ -480,6 +512,17 @@ func AuthResponseToken(w http.ResponseWriter, r *http.Request, authReq AuthReque
 		AuthRequestError(w, r, authReq, err, authorizer)
 		return
 	}
+
+	if authReq.GetResponseMode() == oidc.ResponseModeFormPost {
+		err := AuthResponseFormPost(w, authReq.GetRedirectURI(), resp, authorizer.Encoder())
+		if err != nil {
+			AuthRequestError(w, r, authReq, err, authorizer)
+			return
+		}
+
+		return
+	}
+
 	callback, err := AuthResponseURL(authReq.GetRedirectURI(), authReq.GetResponseType(), authReq.GetResponseMode(), resp, authorizer.Encoder())
 	if err != nil {
 		AuthRequestError(w, r, authReq, err, authorizer)
@@ -490,6 +533,9 @@ func AuthResponseToken(w http.ResponseWriter, r *http.Request, authReq AuthReque
 
 // CreateAuthRequestCode creates and stores a code for the auth code response
 func CreateAuthRequestCode(ctx context.Context, authReq AuthRequest, storage Storage, crypto Crypto) (string, error) {
+	ctx, span := tracer.Start(ctx, "CreateAuthRequestCode")
+	defer span.End()
+
 	code, err := BuildAuthRequestCode(authReq, crypto)
 	if err != nil {
 		return "", err
@@ -529,6 +575,43 @@ func AuthResponseURL(redirectURI string, responseType oidc.ResponseType, respons
 	}
 	// if we get here it's code flow: defaults to query
 	return mergeQueryParams(uri, params), nil
+}
+
+//go:embed form_post.html.tmpl
+var formPostHtmlTemplate string
+
+var formPostTmpl = template.Must(template.New("form_post").Parse(formPostHtmlTemplate))
+
+// AuthResponseFormPost responds a html page that automatically submits the form which contains the auth response parameters
+func AuthResponseFormPost(res http.ResponseWriter, redirectURI string, response any, encoder httphelper.Encoder) error {
+	values := make(map[string][]string)
+	err := encoder.Encode(response, values)
+	if err != nil {
+		return oidc.ErrServerError().WithParent(err)
+	}
+
+	params := &struct {
+		RedirectURI string
+		Params      any
+	}{
+		RedirectURI: redirectURI,
+		Params:      values,
+	}
+
+	var buf bytes.Buffer
+	err = formPostTmpl.Execute(&buf, params)
+	if err != nil {
+		return oidc.ErrServerError().WithParent(err)
+	}
+
+	res.Header().Set("Cache-Control", "no-store")
+	res.WriteHeader(http.StatusOK)
+	_, err = buf.WriteTo(res)
+	if err != nil {
+		return oidc.ErrServerError().WithParent(err)
+	}
+
+	return nil
 }
 
 func setFragment(uri *url.URL, params url.Values) string {

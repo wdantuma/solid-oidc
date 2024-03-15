@@ -4,7 +4,9 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"time"
 
+	"github.com/go-jose/go-jose/v3"
 	"github.com/zitadel/oidc/v3/pkg/client"
 	httphelper "github.com/zitadel/oidc/v3/pkg/http"
 	"github.com/zitadel/oidc/v3/pkg/oidc"
@@ -29,6 +31,17 @@ func NewTokenExchanger(ctx context.Context, issuer string, options ...func(sourc
 func NewTokenExchangerClientCredentials(ctx context.Context, issuer, clientID, clientSecret string, options ...func(source *OAuthTokenExchange)) (TokenExchanger, error) {
 	authorizer := func() (any, error) {
 		return httphelper.AuthorizeBasic(clientID, clientSecret), nil
+	}
+	return newOAuthTokenExchange(ctx, issuer, authorizer, options...)
+}
+
+func NewTokenExchangerJWTProfile(ctx context.Context, issuer, clientID string, signer jose.Signer, options ...func(source *OAuthTokenExchange)) (TokenExchanger, error) {
+	authorizer := func() (any, error) {
+		assertion, err := client.SignedJWTProfileAssertion(clientID, []string{issuer}, time.Hour, signer)
+		if err != nil {
+			return nil, err
+		}
+		return client.ClientAssertionFormAuthorization(assertion), nil
 	}
 	return newOAuthTokenExchange(ctx, issuer, authorizer, options...)
 }
@@ -101,6 +114,9 @@ func ExchangeToken(
 	Scopes []string,
 	RequestedTokenType oidc.TokenType,
 ) (*oidc.TokenExchangeResponse, error) {
+	ctx, span := client.Tracer.Start(ctx, "ExchangeToken")
+	defer span.End()
+
 	if SubjectToken == "" {
 		return nil, errors.New("empty subject_token")
 	}

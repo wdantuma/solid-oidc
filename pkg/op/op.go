@@ -3,6 +3,7 @@ package op
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"time"
 
@@ -11,7 +12,7 @@ import (
 	"github.com/rs/cors"
 	"github.com/wdantuma/go-dpop/dpop"
 	"github.com/zitadel/schema"
-	"golang.org/x/exp/slog"
+	"go.opentelemetry.io/otel"
 	"golang.org/x/text/language"
 
 	httphelper "github.com/zitadel/oidc/v3/pkg/http"
@@ -97,6 +98,8 @@ var (
 	}
 )
 
+var tracer = otel.Tracer("github.com/zitadel/oidc/pkg/op")
+
 type OpenIDProvider interface {
 	http.Handler
 	Configuration
@@ -108,8 +111,6 @@ type OpenIDProvider interface {
 	Crypto() Crypto
 	DefaultLogoutRedirectURI() string
 	Probes() []ProbesFn
-
-	// EXPERIMENTAL: Will change to log/slog import after we drop support for Go 1.20
 	Logger() *slog.Logger
 
 	// Deprecated: Provider now implements http.Handler directly.
@@ -640,8 +641,6 @@ func WithCORSOptions(opts *cors.Options) Option {
 }
 
 // WithLogger lets a logger other than slog.Default().
-//
-// EXPERIMENTAL: Will change to log/slog import after we drop support for Go 1.20
 func WithLogger(logger *slog.Logger) Option {
 	return func(o *Provider) error {
 		o.logger = logger

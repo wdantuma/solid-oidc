@@ -1,7 +1,7 @@
 package oidc
 
 import (
-	"golang.org/x/exp/slog"
+	"log/slog"
 )
 
 const (
@@ -48,6 +48,7 @@ const (
 
 	ResponseModeQuery    ResponseMode = "query"
 	ResponseModeFragment ResponseMode = "fragment"
+	ResponseModeFormPost ResponseMode = "form_post"
 
 	// PromptNone (`none`) disallows the Authorization Server to display any authentication or consent user interface pages.
 	// An error (login_required, interaction_required, ...) will be returned if the user is not already authenticated or consent is needed

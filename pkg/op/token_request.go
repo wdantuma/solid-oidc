@@ -2,12 +2,12 @@ package op
 
 import (
 	"context"
+	"log/slog"
 	"net/http"
 	"net/url"
 
 	httphelper "github.com/zitadel/oidc/v3/pkg/http"
 	"github.com/zitadel/oidc/v3/pkg/oidc"
-	"golang.org/x/exp/slog"
 )
 
 type Exchanger interface {
@@ -34,6 +34,10 @@ func tokenHandler(exchanger Exchanger) func(w http.ResponseWriter, r *http.Reque
 
 // Exchange performs a token exchange appropriate for the grant type
 func Exchange(w http.ResponseWriter, r *http.Request, exchanger Exchanger) {
+	ctx, span := tracer.Start(r.Context(), "Exchange")
+	r = r.WithContext(ctx)
+	defer span.End()
+
 	grantType := r.FormValue("grant_type")
 	switch grantType {
 	case string(oidc.GrantTypeCode):
@@ -108,6 +112,9 @@ func ParseAuthenticatedTokenRequest(r *http.Request, decoder httphelper.Decoder,
 
 // AuthorizeClientIDSecret authorizes a client by validating the client_id and client_secret (Basic Auth and POST)
 func AuthorizeClientIDSecret(ctx context.Context, clientID, clientSecret string, storage Storage) error {
+	ctx, span := tracer.Start(ctx, "AuthorizeClientIDSecret")
+	defer span.End()
+
 	err := storage.AuthorizeClientIDSecret(ctx, clientID, clientSecret)
 	if err != nil {
 		return oidc.ErrInvalidClient().WithDescription("invalid client_id / client_secret").WithParent(err)
