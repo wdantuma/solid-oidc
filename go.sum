@@ -55,8 +55,8 @@ github.com/stretchr/objx v0.1.0/go.mod h1:HFkY916IF+rwdDfMAkV7OtwuqBVzrE8GR6GFx+
 github.com/stretchr/testify v1.7.0/go.mod h1:6Fq8oRcR53rry900zMqJjRRixrwX3KX962/h/Wwjteg=
 github.com/stretchr/testify v1.9.0 h1:HtqpIVDClZ4nwg75+f6Lvsy/wHu+3BoSGCbBAcpTsTg=
 github.com/stretchr/testify v1.9.0/go.mod h1:r2ic/lqez/lEtzL7wO/rwa5dbSLXVDPFyf8C91i36aY=
-github.com/wdantuma/go-dpop v0.0.0-20240315185104-b5de36ed04a8 h1:p7ww2Js1eujmTkEXB25hWJ9vI8e1htpj5VFmN32WzyE=
-github.com/wdantuma/go-dpop v0.0.0-20240315185104-b5de36ed04a8/go.mod h1:hhM172rO3mf/Vzt8J8JZ40UFJb7S0mMVt/vdebdzZqU=
+github.com/wdantuma/go-dpop v0.0.0-20240316095043-57cbd8541f27 h1:HRh8ExaF6tbKHAX2aQDbH4BgWlEooIbQdC8aJD0+WCI=
+github.com/wdantuma/go-dpop v0.0.0-20240316095043-57cbd8541f27/go.mod h1:gz7/I1PSNdLLzzBauvbCYvwz2AxMe+V4jV2RauKfiRE=
 github.com/yuin/goldmark v1.3.5/go.mod h1:mwnBkeHKe2W/ZEtQ+71ViKU8L12m81fl3OWwC1Zlc8k=
 github.com/yuin/goldmark v1.4.13/go.mod h1:6yULJ656Px+3vBD8DxQVa3kxgyrAnzto9xy5taEt/CY=
 github.com/zitadel/logging v0.6.0 h1:t5Nnt//r+m2ZhhoTmoPX+c96pbMarqJvW1Vq6xFTank=

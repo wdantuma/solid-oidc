@@ -16,7 +16,7 @@ require (
 	github.com/rs/cors v1.10.1
 	github.com/sirupsen/logrus v1.9.3
 	github.com/stretchr/testify v1.9.0
-	github.com/wdantuma/go-dpop v0.0.0-20240315185104-b5de36ed04a8
+	github.com/wdantuma/go-dpop v0.0.0-20240316095043-57cbd8541f27
 	github.com/zitadel/logging v0.6.0
 	github.com/zitadel/schema v1.3.0
 	go.opentelemetry.io/otel v1.22.0
